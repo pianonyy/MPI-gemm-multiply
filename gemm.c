@@ -1,20 +1,60 @@
 #include "mpi.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
+#include <time.h>
+#include <sys/time.h>
+#include <signal.h>
 
-#define NRA 2               /* number of rows in matrix A */
-#define NCA 2                 /* number of columns in matrix A */
-#define NCB 2                  /* number of columns in matrix B */
+#define NRA 10                  /* number of rows in matrix A */
+#define NCA 20                 /* number of columns in matrix A */
+#define NCB 30                  /* number of columns in matrix B */
 
 #define MASTER 0               /* taskid of first task */
-#define FROM_MASTER 1          /* setting a message type */
+#define FROM_HOST 1          /* setting a message type */
 #define FROM_WORKER 2          /* setting a message type */
+
+
+#define ALPHA 1.2
+#define BETA 1.5
+
+int killed_proc, killed_line;
+int taskid;
+
+void mat_print(int n_row, int n_col, double matrix[n_row][n_col]){
+
+  for(int i = 0; i < n_row; i++)
+  {
+    printf("\n");
+    for(int j = 0; j < n_col; j++)
+    {
+      printf("%6.2f", matrix[i][j]);
+    }
+
+  }
+  printf("\n_________________________________________________________\n");
+}
+
+
+static
+void die_try(int curr_line) {
+    if (taskid== killed_proc) {
+        if (curr_line == killed_line) {
+            printf("Proc: %d \tRUNNING line in A matrix: %d \t BUT I AM SUICIDING 'BYE'\n", taskid, curr_line);
+            fflush(stdout);
+            raise(SIGKILL);
+        }
+    }
+    printf("Rank: %d \tRUNNING line: %d\n", taskid, curr_line);
+    fflush(stdout);
+}
+
+
 
 int main (int argc, char *argv[])
 {
 int	numtasks,              /* number of tasks in partition */
-	taskid,                /* a task identifier */
-	numworkers,            /* number of worker tasks */
+		numworkers,            /* number of worker tasks */
 	source,                /* task id of message source */
 	dest,                  /* task id of message destination */
 	mtype,                 /* message type */
@@ -29,6 +69,8 @@ MPI_Status status;
 MPI_Init(&argc,&argv);
 MPI_Comm_rank(MPI_COMM_WORLD,&taskid);
 MPI_Comm_size(MPI_COMM_WORLD,&numtasks);
+MPI_Comm_set_errhandler(MPI_COMM_WORLD, MPI_ERRORS_RETURN);
+
 if (numtasks < 2 ) {
   printf("Need at least two MPI tasks. Quitting...\n");
   MPI_Abort(MPI_COMM_WORLD, rc);
@@ -40,26 +82,40 @@ numworkers = numtasks-1;
 /**************************** master task ************************************/
    if (taskid == MASTER)
    {
-      printf("mpi_mm has started with %d tasks.\n",numtasks);
+      printf("start with %d tasks.\n",numtasks);
       printf("Initializing arrays...\n");
       for (i=0; i<NRA; i++)
          for (j=0; j<NCA; j++)
-            a[i][j]= i+j;
+            a[i][j]= (i + j)/20;
 
       for (i=0; i<NCA; i++)
          for (j=0; j<NCB; j++)
-            b[i][j]= i*j;
+            b[i][j]= (2* i + 1)/20;
 
-			for (i=0; i<NRA; i++)
-				 for (j=0; j<NCB; j++)
-						c[i][j]= i*j;
+      for (i=0; i<NRA; i++)
+         for (j=0; j<NCB; j++)
+            c[i][j]= 2 * i + 5;
 
+      srand(time(NULL));
+      killed_proc = rand() % (numtasks);
+      printf("proc to be killed %d\n", killed_proc);
 
+      killed_line = rand() % (NRA);
+      printf("proc to be killed %d\n", killed_line);
+
+      printf("A Matrix:\n");
+      mat_print(NRA, NCA,a);
+
+      printf("B Matrix:\n");
+      mat_print(NCA, NCB,b);
+
+      printf("C Matrix:\n");
+      mat_print(NRA, NCB,c);
       /* Send matrix data to the worker tasks */
       averow = NRA/numworkers;
       extra = NRA%numworkers;
       offset = 0;
-      mtype = FROM_MASTER;
+      mtype = FROM_HOST;
       for (dest=1; dest<=numworkers; dest++)
       {
          rows = (dest <= extra) ? averow+1 : averow;
@@ -69,7 +125,7 @@ numworkers = numtasks-1;
          MPI_Send(&a[offset][0], rows*NCA, MPI_DOUBLE, dest, mtype,
                    MPI_COMM_WORLD);
          MPI_Send(&b, NCA*NCB, MPI_DOUBLE, dest, mtype, MPI_COMM_WORLD);
-				 MPI_Send(&c, NRA*NCB, MPI_DOUBLE, dest, mtype, MPI_COMM_WORLD);
+         MPI_Send(&c[offset][0], rows*NCB, MPI_DOUBLE, dest, mtype, MPI_COMM_WORLD);
          offset = offset + rows;
       }
 
@@ -100,27 +156,58 @@ numworkers = numtasks-1;
 
 
 /**************************** worker task ************************************/
+
    if (taskid > MASTER)
    {
-      mtype = FROM_MASTER;
+      mtype = FROM_HOST;
       MPI_Recv(&offset, 1, MPI_INT, MASTER, mtype, MPI_COMM_WORLD, &status);
       MPI_Recv(&rows, 1, MPI_INT, MASTER, mtype, MPI_COMM_WORLD, &status);
       MPI_Recv(&a, rows*NCA, MPI_DOUBLE, MASTER, mtype, MPI_COMM_WORLD, &status);
       MPI_Recv(&b, NCA*NCB, MPI_DOUBLE, MASTER, mtype, MPI_COMM_WORLD, &status);
-			MPI_Recv(&c, NRA*NCB, MPI_DOUBLE, MASTER, mtype, MPI_COMM_WORLD, &status);
-			double alpha = 1.5;
-			double  beta = 1.2;
-      for (k=0; k<NCB; k++)
-         for (i=0; i<rows; i++)
-         {
-            c[i][k] *= beta;
-            for (j=0; j<NCA; j++)
-               c[i][k] = c[i][k] + alpha * a[i][j] * b[j][k];
+      MPI_Recv(&c, rows * NCB, MPI_DOUBLE, MASTER, mtype, MPI_COMM_WORLD, &status);
+
+      //debug print-------------------------------------------------------------
+
+      // printf("proc %d rec A matrix\n", taskid );
+      // mat_print(rows,NCA,a);
+      // fflush(stdout);
+      //
+      // printf("proc %d rec B matrix\n", taskid );
+      // mat_print(NCA,NCB,b);
+      // fflush(stdout);
+      //
+      // printf("proc %d rec C matrix\n", taskid );
+      // mat_print(NRA,NCB,c);
+      // fflush(stdout);
+
+      for (int i = 0; i < rows; i++){
+        for (int k = 0; k < NCB; k++)
+        {
+            c[i][k] *= BETA;
+
+            //die_try(i);
+            for (int j = 0; j < NCA; j++){
+
+
+               c[i][k] = c[i][k] + ALPHA * a[i][j] * b[j][k];
+            }
+
          }
+
+      }
+
+      //debug print-------------------------------------------------------------
+      // printf("proc %d compute C matrix\n",taskid );
+      // mat_print(rows,NCB,c);
+      // fflush(stdout);
+
       mtype = FROM_WORKER;
       MPI_Send(&offset, 1, MPI_INT, MASTER, mtype, MPI_COMM_WORLD);
       MPI_Send(&rows, 1, MPI_INT, MASTER, mtype, MPI_COMM_WORLD);
       MPI_Send(&c, rows*NCB, MPI_DOUBLE, MASTER, mtype, MPI_COMM_WORLD);
    }
+
+
+
    MPI_Finalize();
 }
