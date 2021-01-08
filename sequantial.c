@@ -2,22 +2,22 @@
 #include <stdlib.h>
 
 
-#define NRA 10                 /* number of rows in matrix A */
-#define NCA 20                 /* number of columns in matrix A */
-#define NCB 30                  /* number of columns in matrix B */
+#define NRA 100                 /* number of rows in matrix A */
+#define NCA 200                 /* number of columns in matrix A */
+#define NCB 300                  /* number of columns in matrix B */
 
 
 #define ALPHA 1.2
 #define BETA 1.5
 
-void mat_print(int n_row, int n_col, double matrix[n_row][n_col]){
+void mat_print(int n_row, int n_col, float matrix[n_row][n_col]){
 
   for(int i = 0; i < n_row; i++)
   {
     printf("\n");
     for(int j = 0; j < n_col; j++)
     {
-      printf("%6.2f", matrix[i][j]);
+      printf("%.6f ", matrix[i][j]);
     }
 
   }
@@ -26,7 +26,7 @@ void mat_print(int n_row, int n_col, double matrix[n_row][n_col]){
 
 
 int main(int argc, char *argv[]) {
-  double	a[NRA][NCA],
+  float	a[NRA][NCA],
   	      b[NCA][NCB],
   	      c[NRA][NCB];
 
@@ -65,6 +65,27 @@ int main(int argc, char *argv[]) {
      }
   }
   printf("C=ALPHA*A*B+BETA*C ResultMatrix:\n");
-  mat_print(NRA, NCB,c);
+
+
+  FILE *fptr = fopen("results_seq.txt", "w");
+  if (fptr == NULL)
+  {
+    printf("Could not open file");
+    return 0;
+  }
+  // fprintf(fptr,"%.6f ", c[0][6]);
+  //
+  for (int i = 0; i < NRA; i++)
+  {
+    fprintf(fptr,"\n");
+    for(int j = 0;j < NCB; j++ ){
+
+      fprintf(fptr,"%.6f ", c[i][j]);
+
+    }
+  }
+  fprintf(fptr,"\n");
+  fclose(fptr);
+
   return 0;
 }

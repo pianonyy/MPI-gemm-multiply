@@ -26,14 +26,14 @@ int numworkers, numtasks;
 int rc, len;
 char errstr[MPI_MAX_ERROR_STRING];
 
-void mat_print(int n_row, int n_col, double matrix[n_row][n_col]){
+void mat_print(int n_row, int n_col, float matrix[n_row][n_col]){
 
   for(int i = 0; i < n_row; i++)
   {
     printf("\n");
     for(int j = 0; j < n_col; j++)
     {
-      printf("%6.2f", matrix[i][j]);
+      printf("%.6f ", matrix[i][j]);
     }
 
   }
@@ -65,8 +65,8 @@ int main (int argc, char *argv[])
   	mtype,                 /* message type */
   	rows,                  /* rows of matrix A sent to each worker */
   	averow, extra, offset, /* used to determine rows sent to each worker */
-  	i, j, k, rc;           /* misc */
-   double	a[NRA][NCA],           /* matrix A to be multiplied */
+  	i, j, k, rc;           
+   float	a[NRA][NCA],           /* matrix A to be multiplied */
   	b[NCA][NCB],           /* matrix B to be multiplied */
   	c[NRA][NCB];           /* result matrix C */
    MPI_Status status;
@@ -90,7 +90,7 @@ int main (int argc, char *argv[])
    //killed_proc = 1 + rand() % (numworkers -1);
    // printf("proc to be killed %d\n", killed_proc);
 
-   killed_line = 5;//rand() % (NRA- (NRA / (numworkers - 1)) );
+   killed_line = rand() % (NRA- (NRA / (numworkers - 1)) );
 
 
 /**************************** master task ************************************/
@@ -137,10 +137,10 @@ int main (int argc, char *argv[])
          printf("Sending %d rows to task %d offset=%d\n",rows,dest,offset);
          MPI_Send(&offset, 1, MPI_INT, dest, mtype, MPI_COMM_WORLD);
          MPI_Send(&rows, 1, MPI_INT, dest, mtype, MPI_COMM_WORLD);
-         MPI_Send(&a[offset][0], rows*NCA, MPI_DOUBLE, dest, mtype,
+         MPI_Send(&a[offset][0], rows*NCA, MPI_FLOAT, dest, mtype,
                    MPI_COMM_WORLD);
-         MPI_Send(&b, NCA*NCB, MPI_DOUBLE, dest, mtype, MPI_COMM_WORLD);
-         MPI_Send(&c[offset][0], rows*NCB, MPI_DOUBLE, dest, mtype, MPI_COMM_WORLD);
+         MPI_Send(&b, NCA*NCB, MPI_FLOAT, dest, mtype, MPI_COMM_WORLD);
+         MPI_Send(&c[offset][0], rows*NCB, MPI_FLOAT, dest, mtype, MPI_COMM_WORLD);
          offset = offset + rows;
       }
 
@@ -161,7 +161,7 @@ int main (int argc, char *argv[])
            averow = NRA / (numworkers-1);
            extra = NRA % (numworkers-1);
            offset = 0;
-           for (dest=1; dest<=(numworkers-1); dest++)
+           for (dest = 1; dest <= (numworkers-1); dest++)
            {
                rows = (dest <= extra) ? averow+1 : averow;
                if (dest == source){
@@ -171,10 +171,10 @@ int main (int argc, char *argv[])
 
                  MPI_Send(&offset, 1, MPI_INT, numworkers, RECOVERY_COMM, MPI_COMM_WORLD);
                  MPI_Send(&rows, 1, MPI_INT, numworkers, RECOVERY_COMM, MPI_COMM_WORLD);
-                 MPI_Send(&a[offset][0], rows*NCA, MPI_DOUBLE, numworkers, RECOVERY_COMM,
+                 MPI_Send(&a[offset][0], rows*NCA, MPI_FLOAT, numworkers, RECOVERY_COMM,
                            MPI_COMM_WORLD);
-                 MPI_Send(&b, NCA*NCB, MPI_DOUBLE, numworkers, RECOVERY_COMM, MPI_COMM_WORLD);
-                 MPI_Send(&c[offset][0], rows*NCB, MPI_DOUBLE, numworkers, RECOVERY_COMM, MPI_COMM_WORLD);
+                 MPI_Send(&b, NCA*NCB, MPI_FLOAT, numworkers, RECOVERY_COMM, MPI_COMM_WORLD);
+                 MPI_Send(&c[offset][0], rows*NCB, MPI_FLOAT, numworkers, RECOVERY_COMM, MPI_COMM_WORLD);
                  MPI_Send(&source, 1, MPI_INT, numworkers, RECOVERY_COMM, MPI_COMM_WORLD);
                  MPI_Send(&killed_line, 1, MPI_INT, numworkers, RECOVERY_COMM, MPI_COMM_WORLD);
 
@@ -187,14 +187,14 @@ int main (int argc, char *argv[])
            /* receive from recovery proc(numworkers)*/
            MPI_Recv(&offset, 1, MPI_INT, numworkers, RECOVERY_COMM , MPI_COMM_WORLD, &status);
            MPI_Recv(&rows, 1, MPI_INT, numworkers, RECOVERY_COMM , MPI_COMM_WORLD, &status);
-           MPI_Recv(&c[offset][0], rows*NCB, MPI_DOUBLE, numworkers, RECOVERY_COMM ,
+           MPI_Recv(&c[offset][0], rows*NCB, MPI_FLOAT, numworkers, RECOVERY_COMM ,
                     MPI_COMM_WORLD, &status);
            printf("Received results from task %d\n",numworkers);
 
          }
          else {
            MPI_Recv(&rows, 1, MPI_INT, source, FROM_WORKER, MPI_COMM_WORLD, &status);
-           MPI_Recv(&c[offset][0], rows*NCB, MPI_DOUBLE, source, FROM_WORKER,
+           MPI_Recv(&c[offset][0], rows*NCB, MPI_FLOAT, source, FROM_WORKER,
                   MPI_COMM_WORLD, &status);
           printf("Received results from task %d\n",source);
          }
@@ -204,17 +204,36 @@ int main (int argc, char *argv[])
 
 
 
-      /* Print results */
-      printf("******************************************************\n");
-      printf("Result Matrix:\n");
-      for (i=0; i<NRA; i++)
+      FILE *fptr = fopen("results.txt", "w");
+      if (fptr == NULL)
       {
-         printf("\n");
-         for (j=0; j<NCB; j++)
-            printf("%6.2f   ", c[i][j]);
+        printf("Could not open file");
+        return 0;
       }
-      printf("\n******************************************************\n");
-      printf ("Done.\n");
+
+      for (int i = 0; i < NRA; i++)
+      {
+        fprintf(fptr,"\n");
+        for(int j = 0;j < NCB; j++ ){
+
+          fprintf(fptr,"%.6f ", c[i][j]);
+
+        }
+      }
+      fprintf(fptr,"\n");
+      fclose(fptr);
+
+      // /* Print results */ standart output
+      // printf("******************************************************\n");
+      // printf("Result Matrix:\n");
+      // for (i=0; i<NRA; i++)
+      // {
+      //    printf("\n");
+      //    for (j=0; j<NCB; j++)
+      //       printf("%.6f   ", c[i][j]);
+      // }
+      // printf("\n******************************************************\n");
+      // printf ("Done.\n");
    }
 
 
@@ -225,23 +244,11 @@ int main (int argc, char *argv[])
       mtype = FROM_HOST;
       MPI_Recv(&offset, 1, MPI_INT, MASTER, mtype, MPI_COMM_WORLD, &status);
       MPI_Recv(&rows, 1, MPI_INT, MASTER, mtype, MPI_COMM_WORLD, &status);
-      MPI_Recv(&a, rows*NCA, MPI_DOUBLE, MASTER, mtype, MPI_COMM_WORLD, &status);
-      MPI_Recv(&b, NCA*NCB, MPI_DOUBLE, MASTER, mtype, MPI_COMM_WORLD, &status);
-      MPI_Recv(&c, rows * NCB, MPI_DOUBLE, MASTER, mtype, MPI_COMM_WORLD, &status);
+      MPI_Recv(&a, rows*NCA, MPI_FLOAT, MASTER, mtype, MPI_COMM_WORLD, &status);
+      MPI_Recv(&b, NCA*NCB, MPI_FLOAT, MASTER, mtype, MPI_COMM_WORLD, &status);
+      MPI_Recv(&c, rows * NCB, MPI_FLOAT, MASTER, mtype, MPI_COMM_WORLD, &status);
 
-      //debug print-------------------------------------------------------------
-
-      // printf("proc %d rec A matrix\n", taskid );
-      // mat_print(rows,NCA,a);
-      // fflush(stdout);
-      //
-      // printf("proc %d rec B matrix\n", taskid );
-      // mat_print(NCA,NCB,b);
-      // fflush(stdout);
-      //
-      // printf("proc %d rec C matrix\n", taskid );
-      // mat_print(NRA,NCB,c);
-      // fflush(stdout);
+     
 
       for (int i = 0; i < rows; i++){
         for (int k = 0; k < NCB; k++)
@@ -260,12 +267,12 @@ int main (int argc, char *argv[])
          // create control point------------------------------------------------
 
          char name[20];
-         printf("num_proc %d computed_line %d \n", taskid, (i + offset) );
+         printf("num_proc %d computed_line %d\n", taskid, (i + offset) );
          snprintf(name, sizeof name, "proc_%d_%d.txt", taskid, (i + offset) );
          FILE *f = fopen(name, "w");
 
          for(int j = 0; j < NCB; j++) {
-           fprintf(f, "%6.2f", c[i][j]);
+           fprintf(f, "%.6f\n", c[i][j]);
          }
 
          fclose(f);
@@ -280,7 +287,7 @@ int main (int argc, char *argv[])
       mtype = FROM_WORKER;
       MPI_Send(&offset, 1, MPI_INT, MASTER, mtype, MPI_COMM_WORLD);
       MPI_Send(&rows, 1, MPI_INT, MASTER, mtype, MPI_COMM_WORLD);
-      MPI_Send(&c, rows*NCB, MPI_DOUBLE, MASTER, mtype, MPI_COMM_WORLD);
+      MPI_Send(&c, rows*NCB, MPI_FLOAT, MASTER, mtype, MPI_COMM_WORLD);
    }
 
 /**************************** recovery task ***********************************/
@@ -292,27 +299,13 @@ int main (int argc, char *argv[])
 
      MPI_Recv(&offset, 1, MPI_INT, MASTER, RECOVERY_COMM, MPI_COMM_WORLD, &status);
      MPI_Recv(&rows, 1, MPI_INT, MASTER, RECOVERY_COMM, MPI_COMM_WORLD, &status);
-     MPI_Recv(&a, rows*NCA, MPI_DOUBLE, MASTER, RECOVERY_COMM, MPI_COMM_WORLD, &status);
-     MPI_Recv(&b, NCA*NCB, MPI_DOUBLE, MASTER, RECOVERY_COMM, MPI_COMM_WORLD, &status);
-     MPI_Recv(&c, rows * NCB, MPI_DOUBLE, MASTER, RECOVERY_COMM, MPI_COMM_WORLD, &status);
+     MPI_Recv(&a, rows*NCA, MPI_FLOAT, MASTER, RECOVERY_COMM, MPI_COMM_WORLD, &status);
+     MPI_Recv(&b, NCA*NCB, MPI_FLOAT, MASTER, RECOVERY_COMM, MPI_COMM_WORLD, &status);
+     MPI_Recv(&c, rows * NCB, MPI_FLOAT, MASTER, RECOVERY_COMM, MPI_COMM_WORLD, &status);
      MPI_Recv(&broken_proc, 1, MPI_INT, MASTER, RECOVERY_COMM, MPI_COMM_WORLD, &status);
      MPI_Recv(&broken_line, 1, MPI_INT, MASTER, RECOVERY_COMM, MPI_COMM_WORLD, &status);
 
-     // printf("proc %d rec number of broken_proc %d\n", taskid, broken_proc);
-     // printf("recovery Worker %d has started recovery procedure\n", taskid);
-     // fflush(stdout);
-
-     // printf("proc %d rec A matrix\n", taskid );
-     // mat_print(rows,NCA,a);
-     // fflush(stdout);
-     //
-     // printf("proc %d rec B matrix\n", taskid );
-     // mat_print(NCA,NCB,b);
-     // fflush(stdout);
-     //
-     // printf("proc %d rec C matrix\n", taskid );
-     // mat_print(rows,NCB,c);
-     // fflush(stdout);
+    
 
      char name[20];
      int lines;
@@ -323,20 +316,21 @@ int main (int argc, char *argv[])
 
 
      lines = broken_line;
-
-     while (lines >= 0){
+     int i = 0;
+     while (lines >= offset){
        snprintf(name, sizeof name, "proc_%d_%d.txt", broken_proc, lines);
        FILE *f = fopen(name, "r");
        if (f == NULL) {
-         i_start = lines - 1;
+         printf("not_found file proc_%d_%d.txt\n",broken_proc, lines);
+         // i_start = lines - 1;
 
        }
        else{
 
-         for_rec = broken_line - offset - 1;
+         for_rec = lines - offset + 1;
 
-           // all scanf to do!!!!
-         i_start = i + 1;
+
+         i_start = i + for_rec;
 
          fclose(f);
          break;
@@ -344,15 +338,25 @@ int main (int argc, char *argv[])
        lines = lines - 1;
      }
 
+     if (lines < offset){
+       i_start = 0;
+     }
      printf("for_rec = %d\n", for_rec );
      //scanf from recovery files
-     while (for_rec >= 0){
+     float buf;
+     while (for_rec > 0){
        printf("I'm HERE!!!!\n" );
-       snprintf(name, sizeof name, "proc_%d_%d.txt", broken_proc, (for_rec + offset) );
+       snprintf(name, sizeof name, "proc_%d_%d.txt", broken_proc, (for_rec + offset - 1) );
        FILE *f_rec = fopen(name, "r");
+
+
+
        for (int j = 0; j < NCB; j++) {
-         fscanf(f_rec, "%lf", &c[for_rec][j]);
+         fscanf(f_rec, "%f", &buf);
+         printf("scaneed %f\n", buf);
+         c[for_rec - 1][j] = buf;
        }
+       printf("%s\n", name);
        for_rec--;
        fclose(f_rec);
      }
@@ -377,7 +381,7 @@ int main (int argc, char *argv[])
      mtype = RECOVERY_COMM;
      MPI_Send(&offset, 1, MPI_INT, MASTER, mtype, MPI_COMM_WORLD);
      MPI_Send(&rows, 1, MPI_INT, MASTER, mtype, MPI_COMM_WORLD);
-     MPI_Send(&c, rows*NCB, MPI_DOUBLE, MASTER, mtype, MPI_COMM_WORLD);
+     MPI_Send(&c, rows * NCB, MPI_FLOAT, MASTER, mtype, MPI_COMM_WORLD);
    }
 
 
