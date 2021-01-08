@@ -6,9 +6,9 @@
 #include <sys/time.h>
 #include <signal.h>
 
-#define NRA 10                  /* number of rows in matrix A */
-#define NCA 20                 /* number of columns in matrix A */
-#define NCB 30                  /* number of columns in matrix B */
+#define NRA 100                 /* number of rows in matrix A */
+#define NCA 200                /* number of columns in matrix A */
+#define NCB 300                  /* number of columns in matrix B */
 
 #define MASTER 0               /* taskid of first task */
 #define FROM_HOST 1          /* setting a message type */
@@ -90,7 +90,7 @@ int main (int argc, char *argv[])
    //killed_proc = 1 + rand() % (numworkers -1);
    // printf("proc to be killed %d\n", killed_proc);
 
-   killed_line = 8; //rand() % (NRA- (NRA / (numworkers - 1)) );
+   killed_line = 5;//rand() % (NRA- (NRA / (numworkers - 1)) );
 
 
 /**************************** master task ************************************/
@@ -320,12 +320,12 @@ int main (int argc, char *argv[])
      printf("Proc: %d is finding need recovery file....\n", taskid);
 
 
-     snprintf(name, sizeof name, "proc_%d_%d.txt", broken_proc, broken_line);
+
 
      lines = broken_line;
 
      while (lines >= 0){
-
+       snprintf(name, sizeof name, "proc_%d_%d.txt", broken_proc, lines);
        FILE *f = fopen(name, "r");
        if (f == NULL) {
          i_start = lines - 1;
@@ -333,7 +333,7 @@ int main (int argc, char *argv[])
        }
        else{
 
-         for_rec = broken_line - offset;
+         for_rec = broken_line - offset - 1;
 
            // all scanf to do!!!!
          i_start = i + 1;
@@ -344,19 +344,20 @@ int main (int argc, char *argv[])
        lines = lines - 1;
      }
 
-
+     printf("for_rec = %d\n", for_rec );
      //scanf from recovery files
      while (for_rec >= 0){
        printf("I'm HERE!!!!\n" );
-       snprintf(name, sizeof name, "proc_%d_%d.txt", broken_proc, (for_rec+offset) );
+       snprintf(name, sizeof name, "proc_%d_%d.txt", broken_proc, (for_rec + offset) );
        FILE *f_rec = fopen(name, "r");
        for (int j = 0; j < NCB; j++) {
          fscanf(f_rec, "%lf", &c[for_rec][j]);
        }
+       for_rec--;
        fclose(f_rec);
      }
 
-
+     printf("Recovery proc started with line %d\n", i_start);
      for (int i = i_start; i < rows; i++){
        for (int k = 0; k < NCB; k++)
        {
