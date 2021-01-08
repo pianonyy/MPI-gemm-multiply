@@ -1,5 +1,7 @@
 # MPI-gemm-multiply
+```
 C=alpha*A*B + beta * C
+```
 
 ## Settings using docker:
 ```bash
