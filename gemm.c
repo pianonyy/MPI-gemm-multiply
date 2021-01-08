@@ -44,7 +44,7 @@ void mat_print(int n_row, int n_col, double matrix[n_row][n_col]){
 static void die_try(int curr_line) {
         if (curr_line == killed_line) {
             printf("killed line %d\n", killed_line );
-            printf("Proc: %d \tRUNNING line in A matrix: %d \t BUT I AM SUICIDING 'BYE'\n", taskid, curr_line);
+            printf("Proc: %d   line in A matrix: %d SIGKILLED\n", taskid, curr_line);
             fflush(stdout);
             raise(SIGKILL);
         }
@@ -54,12 +54,9 @@ static void die_try(int curr_line) {
 }
 
 
-// static
-// void control_point(int curr_line) {
-//     char name[20];
-//     snprintf(name, sizeof name, "proc_%d_%d.txt", taskid, curr_line);
-//     FILE *f = fopen(name, "w");
-// }
+
+
+
 
 int main (int argc, char *argv[])
 {
@@ -90,10 +87,10 @@ int main (int argc, char *argv[])
    numworkers = numtasks-1;
 
    srand(20);
-   killed_proc = 1 + rand() % (numworkers -1);
+   //killed_proc = 1 + rand() % (numworkers -1);
    // printf("proc to be killed %d\n", killed_proc);
 
-   killed_line = 7; //rand() % (NRA- (NRA / (numworkers - 1)) );
+   killed_line = 8; //rand() % (NRA- (NRA / (numworkers - 1)) );
 
 
 /**************************** master task ************************************/
@@ -178,6 +175,9 @@ int main (int argc, char *argv[])
                            MPI_COMM_WORLD);
                  MPI_Send(&b, NCA*NCB, MPI_DOUBLE, numworkers, RECOVERY_COMM, MPI_COMM_WORLD);
                  MPI_Send(&c[offset][0], rows*NCB, MPI_DOUBLE, numworkers, RECOVERY_COMM, MPI_COMM_WORLD);
+                 MPI_Send(&source, 1, MPI_INT, numworkers, RECOVERY_COMM, MPI_COMM_WORLD);
+                 MPI_Send(&killed_line, 1, MPI_INT, numworkers, RECOVERY_COMM, MPI_COMM_WORLD);
+
                  printf("DONE !!!! Sent %d rows to task %d offset=%d\n",rows,numworkers,offset);
                  fflush(stdout);
                }
@@ -287,29 +287,77 @@ int main (int argc, char *argv[])
    if (taskid == numworkers){
 
      MPI_Status status;
-
+     int broken_proc, broken_line;
+     int i_start;
 
      MPI_Recv(&offset, 1, MPI_INT, MASTER, RECOVERY_COMM, MPI_COMM_WORLD, &status);
      MPI_Recv(&rows, 1, MPI_INT, MASTER, RECOVERY_COMM, MPI_COMM_WORLD, &status);
      MPI_Recv(&a, rows*NCA, MPI_DOUBLE, MASTER, RECOVERY_COMM, MPI_COMM_WORLD, &status);
      MPI_Recv(&b, NCA*NCB, MPI_DOUBLE, MASTER, RECOVERY_COMM, MPI_COMM_WORLD, &status);
      MPI_Recv(&c, rows * NCB, MPI_DOUBLE, MASTER, RECOVERY_COMM, MPI_COMM_WORLD, &status);
+     MPI_Recv(&broken_proc, 1, MPI_INT, MASTER, RECOVERY_COMM, MPI_COMM_WORLD, &status);
+     MPI_Recv(&broken_line, 1, MPI_INT, MASTER, RECOVERY_COMM, MPI_COMM_WORLD, &status);
 
-     printf("recovery Worker %d has started recovery procedure\n", taskid );
+     // printf("proc %d rec number of broken_proc %d\n", taskid, broken_proc);
+     // printf("recovery Worker %d has started recovery procedure\n", taskid);
+     // fflush(stdout);
 
-     printf("proc %d rec A matrix\n", taskid );
-     mat_print(rows,NCA,a);
-     fflush(stdout);
+     // printf("proc %d rec A matrix\n", taskid );
+     // mat_print(rows,NCA,a);
+     // fflush(stdout);
+     //
+     // printf("proc %d rec B matrix\n", taskid );
+     // mat_print(NCA,NCB,b);
+     // fflush(stdout);
+     //
+     // printf("proc %d rec C matrix\n", taskid );
+     // mat_print(rows,NCB,c);
+     // fflush(stdout);
 
-     printf("proc %d rec B matrix\n", taskid );
-     mat_print(NCA,NCB,b);
-     fflush(stdout);
+     char name[20];
+     int lines;
+     int for_rec = -3;
+     printf("Proc: %d is finding need recovery file....\n", taskid);
 
-     printf("proc %d rec C matrix\n", taskid );
-     mat_print(rows,NCB,c);
-     fflush(stdout);
-     // i = 0; // uznat' stroky is nazvaniya faila
-     for (int i = 0; i < rows; i++){
+
+     snprintf(name, sizeof name, "proc_%d_%d.txt", broken_proc, broken_line);
+
+     lines = broken_line;
+
+     while (lines >= 0){
+
+       FILE *f = fopen(name, "r");
+       if (f == NULL) {
+         i_start = lines - 1;
+
+       }
+       else{
+
+         for_rec = broken_line - offset;
+
+           // all scanf to do!!!!
+         i_start = i + 1;
+
+         fclose(f);
+         break;
+       }
+       lines = lines - 1;
+     }
+
+
+     //scanf from recovery files
+     while (for_rec >= 0){
+       printf("I'm HERE!!!!\n" );
+       snprintf(name, sizeof name, "proc_%d_%d.txt", broken_proc, (for_rec+offset) );
+       FILE *f_rec = fopen(name, "r");
+       for (int j = 0; j < NCB; j++) {
+         fscanf(f_rec, "%lf", &c[for_rec][j]);
+       }
+       fclose(f_rec);
+     }
+
+
+     for (int i = i_start; i < rows; i++){
        for (int k = 0; k < NCB; k++)
        {
 
