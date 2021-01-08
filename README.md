@@ -108,3 +108,66 @@ Result Matrix:
 Done.
 
 ```
+## Recovery part
+Используем сохраненные текстовые файлы на диске и начинаем вычисление в резервном процессе со строчки i_start.
+```c
+
+     char name[20];
+     int lines;
+     int for_rec = -3;
+     printf("Proc: %d is finding need recovery file....\n", taskid);
+
+
+     snprintf(name, sizeof name, "proc_%d_%d.txt", broken_proc, broken_line);
+
+     lines = broken_line;
+
+     while (lines >= 0){
+
+       FILE *f = fopen(name, "r");
+       if (f == NULL) {
+         i_start = lines - 1;
+
+       }
+       else{
+
+         for_rec = broken_line - offset;
+
+           // all scanf to do!!!!
+         i_start = i + 1;
+
+         fclose(f);
+         break;
+       }
+       lines = lines - 1;
+     }
+
+
+     //scanf from recovery files
+     while (for_rec >= 0){
+       snprintf(name, sizeof name, "proc_%d_%d.txt", broken_proc, (for_rec+offset) );
+       FILE *f_rec = fopen(name, "r");
+       for (int j = 0; j < NCB; j++) {
+         fscanf(f_rec, "%lf", &c[for_rec][j]);
+       }
+       fclose(f_rec);
+     }
+
+
+     for (int i = i_start; i < rows; i++){
+       for (int k = 0; k < NCB; k++)
+       {
+
+           c[i][k] *= BETA;
+
+
+           for (int j = 0; j < NCA; j++){
+
+
+              c[i][k] = c[i][k] + ALPHA * a[i][j] * b[j][k];
+           }
+
+        }
+     }
+
+```
