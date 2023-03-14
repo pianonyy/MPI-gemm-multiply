@@ -4,8 +4,10 @@
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
+#include <chrono>
 
 using namespace std;
+using namespace std::chrono;
 
 struct Point {
     double x;
@@ -47,7 +49,7 @@ int main(int argc, char** argv) {
         }
     }
     MPI_Bcast(centroids.data(), k * num_dims, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
+    auto start = high_resolution_clock::now();
     // Run the K-Means algorithm
     const int max_iterations = 10000;
     for (int iteration = 0; iteration < max_iterations; ++iteration) {
@@ -95,9 +97,12 @@ int main(int argc, char** argv) {
         centroids = new_centroids;
         MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, centroids.data(), k * num_dims, MPI_DOUBLE, MPI_COMM_WORLD);
     }
-
+    auto end = high_resolution_clock::now();
+    auto duration = duration_cast<microseconds>(end - start).count();
     // Print the final centroids
     if (rank == 0) {
+        // Print the duration in milliseconds
+        cout << "Duration: " << duration << " microseconds" << endl;
         cout << "Final centroids:" << endl;
         for (int i = 0; i < k; ++i) {
             cout << centroids[i].x << "," << centroids[i].y << endl;
